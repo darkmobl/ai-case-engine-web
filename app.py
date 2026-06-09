@@ -210,15 +210,11 @@ def render_agent_cockpit(agent_view: pd.DataFrame) -> pd.Series:
 
     with queue_col:
         st.markdown('<div class="cockpit-heading">Case Queue</div>', unsafe_allow_html=True)
-        selected_id = st.selectbox(
-            "Case auswählen",
-            case_ids,
-            index=case_ids.index(current),
-            format_func=lambda case_id: radio_label(agent_view, case_id),
-            key="selected_case_id",
-        )
+        selected_id = current
         selected_row = selected_case(agent_view, selected_id)
         render_case_queue(agent_view, selected_id)
+        selected_id = st.session_state.get("selected_case_id", selected_id)
+        selected_row = selected_case(agent_view, selected_id)
 
     with workspace_col:
         render_case_workspace(selected_row)
@@ -227,31 +223,39 @@ def render_agent_cockpit(agent_view: pd.DataFrame) -> pd.Series:
 
 
 def render_case_queue(agent_view: pd.DataFrame, selected_id: str) -> None:
+    st.markdown('<div class="queue-scroll">', unsafe_allow_html=True)
     for _, row in agent_view.iterrows():
         case_id = value(row, "case_id")
         selected_class = " selected" if str(case_id) == str(selected_id) else ""
         priority = value(row, "case_priority_class")
         risk = value(row, "escalation_risk_level")
         card_tone = queue_tone(priority, risk)
-        st.markdown(
-            f"""
-            <div class="queue-row queue-{card_tone}{selected_class}">
-                <div class="queue-main">
-                    <div class="queue-id">{escape(case_id)}</div>
-                    <div class="queue-person">
-                        <strong>{escape(short_text(value(row, "customer_name"), 28))}</strong>
-                        <span>{escape(short_text(value(row, "vehicle_model"), 22))}</span>
+        button_col, row_col = st.columns([0.13, 0.87], gap="small")
+        with button_col:
+            if st.button("›", key=f"case_select_{case_id}", help=f"Case {case_id} auswählen"):
+                st.session_state["selected_case_id"] = case_id
+                selected_class = " selected"
+        with row_col:
+            st.markdown(
+                f"""
+                <div class="queue-row queue-{card_tone}{selected_class}">
+                    <div class="queue-main">
+                        <div class="queue-id">{escape(case_id)}</div>
+                        <div class="queue-person">
+                            <strong>{escape(short_text(value(row, "customer_name"), 24))}</strong>
+                            <span>{escape(short_text(value(row, "vehicle_model"), 20))}</span>
+                        </div>
+                    </div>
+                    <div class="queue-status">
+                        {badge(priority, "priority")}
+                        {badge(risk, "risk")}
+                        <span class="score-chip">{escape(value(row, "priority_score") or "-")}</span>
                     </div>
                 </div>
-                <div class="queue-status">
-                    {badge(priority, "priority")}
-                    {badge(risk, "risk")}
-                    <span class="score-chip">{escape(value(row, "priority_score") or "-")}</span>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+                """,
+                unsafe_allow_html=True,
+            )
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_case_workspace(row: pd.Series) -> None:
@@ -644,6 +648,12 @@ def apply_theme() -> None:
             margin: 10px 0 14px;
         }
 
+        .queue-scroll {
+            max-height: 690px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
         .workspace-section-title,
         .table-title {
             color: #344054;
@@ -660,9 +670,9 @@ def apply_theme() -> None:
             display: flex;
             gap: 10px;
             justify-content: space-between;
-            margin: 6px 0;
-            min-height: 52px;
-            padding: 8px 10px;
+            margin: 4px 0 8px;
+            min-height: 48px;
+            padding: 7px 10px;
         }
 
         .queue-row.selected {
@@ -683,9 +693,9 @@ def apply_theme() -> None:
 
         .queue-id {
             color: var(--ink);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 850;
-            min-width: 58px;
+            min-width: 52px;
         }
 
         .queue-person {
@@ -695,7 +705,7 @@ def apply_theme() -> None:
         .queue-person strong {
             color: var(--ink);
             display: block;
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1.2;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -705,7 +715,7 @@ def apply_theme() -> None:
         .queue-person span {
             color: var(--muted);
             display: block;
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.2;
             margin-top: 2px;
             overflow: hidden;
@@ -726,7 +736,7 @@ def apply_theme() -> None:
             font-size: 10px;
             font-weight: 850;
             line-height: 1;
-            padding: 5px 7px;
+            padding: 4px 6px;
             text-transform: uppercase;
         }
 
@@ -743,7 +753,24 @@ def apply_theme() -> None:
             font-weight: 800;
             font-size: 10px;
             line-height: 1;
-            padding: 5px 7px;
+            padding: 4px 6px;
+        }
+
+        div[data-testid="column"]:has(button[title*="auswählen"]) {
+            display: flex;
+            align-items: center;
+        }
+
+        button[title*="auswählen"] {
+            min-height: 32px !important;
+            height: 32px !important;
+            width: 32px !important;
+            padding: 0 !important;
+            border-radius: 999px !important;
+            border: 1px solid #cbd5e1 !important;
+            background: #ffffff !important;
+            color: #2563eb !important;
+            font-weight: 900 !important;
         }
 
         .customer-header {
