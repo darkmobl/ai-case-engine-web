@@ -206,7 +206,7 @@ def render_agent_cockpit(agent_view: pd.DataFrame) -> pd.Series:
         current = case_ids[0]
         st.session_state["selected_case_id"] = current
 
-    queue_col, workspace_col = st.columns([0.32, 0.68], gap="large")
+    queue_col, workspace_col = st.columns([0.30, 0.70], gap="large")
 
     with queue_col:
         st.markdown('<div class="cockpit-heading">Case Queue</div>', unsafe_allow_html=True)
@@ -235,22 +235,19 @@ def render_case_queue(agent_view: pd.DataFrame, selected_id: str) -> None:
         card_tone = queue_tone(priority, risk)
         st.markdown(
             f"""
-            <div class="queue-card queue-{card_tone}{selected_class}">
-                <div class="queue-topline">
-                    <strong>{escape(case_id)}</strong>
-                    <div class="badge-row">
-                        {badge(priority, "priority")}
-                        {badge(risk, "risk")}
+            <div class="queue-row queue-{card_tone}{selected_class}">
+                <div class="queue-main">
+                    <div class="queue-id">{escape(case_id)}</div>
+                    <div class="queue-person">
+                        <strong>{escape(short_text(value(row, "customer_name"), 28))}</strong>
+                        <span>{escape(short_text(value(row, "vehicle_model"), 22))}</span>
                     </div>
                 </div>
-                <div class="queue-customer">{escape(value(row, "customer_name"))}</div>
-                <div class="queue-model">{escape(value(row, "vehicle_model"))}</div>
-                <div class="queue-meta">
-                    <span>Urgency <b>{escape(value(row, "urgency_level"))}</b></span>
-                    <span>Business <b>{escape(value(row, "business_value_level"))}</b></span>
-                    <span>Score <b>{escape(value(row, "priority_score"))}</b></span>
+                <div class="queue-status">
+                    {badge(priority, "priority")}
+                    {badge(risk, "risk")}
+                    <span class="score-chip">{escape(value(row, "priority_score") or "-")}</span>
                 </div>
-                <div class="queue-template">{escape(value(row, "recommended_template_id"))}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -272,26 +269,22 @@ def render_case_workspace(row: pd.Series) -> None:
                     {escape(value(row, "vehicle_model") or "-")} ·
                     Score {escape(value(row, "priority_score") or "-")}
                 </p>
-                <p class="template-line">Template {escape(value(row, "recommended_template_id") or "-")}</p>
+                <p class="template-line">
+                    Template {escape(value(row, "recommended_template_id") or "-")}
+                    · Tone {escape(value(row, "tone_level") or "-")}
+                </p>
             </div>
             <div class="customer-badges">
                 {badge(value(row, "case_priority_class"), "priority")}
                 {badge(value(row, "escalation_risk_level"), "risk")}
-                {badge(value(row, "urgency_level"), "neutral")}
-                {badge(value(row, "business_value_level"), "neutral")}
+                {badge("Urgency: " + (value(row, "urgency_level") or "-"), "neutral")}
+                {badge("Business: " + (value(row, "business_value_level") or "-"), "neutral")}
+                {badge("Score: " + (value(row, "priority_score") or "-"), "neutral")}
             </div>
         </section>
         """,
         unsafe_allow_html=True,
     )
-
-    st.markdown('<div class="workspace-section-title">Assessment</div>', unsafe_allow_html=True)
-    a1, a2, a3, a4, a5 = st.columns(5)
-    a1.markdown(assessment_card("Priority", value(row, "case_priority_class"), "priority"), unsafe_allow_html=True)
-    a2.markdown(assessment_card("Risk", value(row, "escalation_risk_level"), "risk"), unsafe_allow_html=True)
-    a3.markdown(assessment_card("Urgency", value(row, "urgency_level"), "neutral"), unsafe_allow_html=True)
-    a4.markdown(assessment_card("Business Value", value(row, "business_value_level"), "neutral"), unsafe_allow_html=True)
-    a5.markdown(assessment_card("Tone Level", value(row, "tone_level"), "neutral"), unsafe_allow_html=True)
 
     action_text = value(row, "recommended_next_action")
     st.markdown(
@@ -404,6 +397,13 @@ def value(row: pd.Series, column: str) -> str:
     return str(raw)
 
 
+def short_text(text: str, max_len: int) -> str:
+    clean = str(text or "").strip()
+    if len(clean) <= max_len:
+        return clean
+    return clean[: max_len - 1].rstrip() + "…"
+
+
 def queue_tone(priority: str, risk: str) -> str:
     if str(priority).upper() == "P1" or str(risk).lower() == "red":
         return "critical"
@@ -428,26 +428,6 @@ def badge(text: str, kind: str) -> str:
 def info_card(title: str, text: str) -> str:
     return f"""
     <div class="info-card">
-        <span>{escape(title)}</span>
-        <strong>{escape(text) if text else "-"}</strong>
-    </div>
-    """
-
-
-def assessment_card(title: str, text: str, kind: str) -> str:
-    tone = "neutral"
-    normalized = str(text).lower()
-    if kind == "priority":
-        tone = {"p1": "red", "p2": "orange", "p3": "yellow", "p4": "green"}.get(normalized, "neutral")
-    elif kind == "risk":
-        tone = {"red": "red", "orange": "orange", "yellow": "yellow", "green": "green"}.get(
-            normalized,
-            "neutral",
-        )
-    elif kind == "score":
-        tone = "blue"
-    return f"""
-    <div class="assessment-card assess-{tone}">
         <span>{escape(title)}</span>
         <strong>{escape(text) if text else "-"}</strong>
     </div>
@@ -575,9 +555,8 @@ def apply_theme() -> None:
 
         .start-card,
         .kpi-card,
-        .queue-card,
+        .queue-row,
         .info-card,
-        .assessment-card,
         .large-card {
             background: var(--surface);
             border: 1px solid var(--line);
@@ -636,7 +615,6 @@ def apply_theme() -> None:
 
         .kpi-card span,
         .info-card span,
-        .assessment-card span,
         .large-card span {
             color: var(--muted);
             display: block;
@@ -675,47 +653,80 @@ def apply_theme() -> None:
             text-transform: uppercase;
         }
 
-        .queue-card {
-            border-left: 6px solid #94a3b8;
-            margin: 12px 0;
-            padding: 16px;
-        }
-
-        .queue-card.selected {
-            background: #f8fbff;
-            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.14);
-            outline: 3px solid rgba(37, 99, 235, 0.24);
-        }
-
-        .queue-critical { border-left-color: var(--red); }
-        .queue-elevated { border-left-color: var(--orange); }
-
-        .queue-topline {
+        .queue-row {
             align-items: center;
+            border-left: 4px solid #cbd5e1;
+            box-shadow: none;
             display: flex;
             gap: 10px;
             justify-content: space-between;
+            margin: 6px 0;
+            min-height: 52px;
+            padding: 8px 10px;
         }
 
-        .queue-topline strong {
-            color: var(--ink);
-            font-size: 17px;
+        .queue-row.selected {
+            background: #eef6ff;
+            border-color: #93c5fd;
+            border-left-color: var(--blue);
         }
 
-        .badge-row {
+        .queue-critical { border-left-color: #ef4444; }
+        .queue-elevated { border-left-color: #fb923c; }
+
+        .queue-main {
+            align-items: center;
             display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            justify-content: flex-end;
+            gap: 9px;
+            min-width: 0;
+        }
+
+        .queue-id {
+            color: var(--ink);
+            font-size: 12px;
+            font-weight: 850;
+            min-width: 58px;
+        }
+
+        .queue-person {
+            min-width: 0;
+        }
+
+        .queue-person strong {
+            color: var(--ink);
+            display: block;
+            font-size: 13px;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .queue-person span {
+            color: var(--muted);
+            display: block;
+            font-size: 11px;
+            line-height: 1.2;
+            margin-top: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .queue-status {
+            align-items: center;
+            display: flex;
+            flex-shrink: 0;
+            gap: 5px;
         }
 
         .badge {
             border-radius: 999px;
             display: inline-block;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 850;
             line-height: 1;
-            padding: 7px 9px;
+            padding: 5px 7px;
             text-transform: uppercase;
         }
 
@@ -725,50 +736,14 @@ def apply_theme() -> None:
         .badge-green { background: #dcfce7; color: #14532d; }
         .badge-neutral { background: #e2e8f0; color: #334155; }
 
-        .queue-customer {
+        .score-chip {
+            background: #f1f5f9;
+            border-radius: 999px;
             color: var(--ink);
-            font-size: 16px;
             font-weight: 800;
-            margin-top: 12px;
-        }
-
-        .queue-model {
-            color: var(--muted);
-            font-size: 14px;
-            margin-top: 2px;
-        }
-
-        .queue-meta {
-            display: grid;
-            gap: 6px;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            margin-top: 14px;
-        }
-
-        .queue-meta span {
-            background: #f8fafc;
-            border-radius: 10px;
-            color: var(--muted);
-            font-size: 11px;
-            padding: 8px;
-        }
-
-        .queue-meta b {
-            color: var(--ink);
-            display: block;
-            font-size: 13px;
-            margin-top: 3px;
-            overflow-wrap: anywhere;
-        }
-
-        .queue-template {
-            border-top: 1px solid var(--line);
-            color: #344054;
-            font-size: 12px;
-            font-weight: 800;
-            margin-top: 12px;
-            overflow-wrap: anywhere;
-            padding-top: 10px;
+            font-size: 10px;
+            line-height: 1;
+            padding: 5px 7px;
         }
 
         .customer-header {
@@ -776,17 +751,17 @@ def apply_theme() -> None:
             background: #ffffff;
             border: 1px solid var(--line);
             border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+            box-shadow: 0 6px 18px rgba(16, 24, 40, 0.05);
             display: flex;
             gap: 18px;
             justify-content: space-between;
             margin: 10px 0 16px;
-            padding: 24px;
+            padding: 22px 24px;
         }
 
         .customer-header h2 {
             color: var(--ink);
-            font-size: 30px;
+            font-size: 28px;
             line-height: 1.15;
             margin: 0;
             letter-spacing: 0;
@@ -811,14 +786,12 @@ def apply_theme() -> None:
             max-width: 340px;
         }
 
-        .info-card,
-        .assessment-card {
+        .info-card {
             min-height: 104px;
             padding: 17px;
         }
 
-        .info-card strong,
-        .assessment-card strong {
+        .info-card strong {
             color: var(--ink);
             display: block;
             font-size: 20px;
@@ -827,34 +800,23 @@ def apply_theme() -> None:
             overflow-wrap: anywhere;
         }
 
-        .assessment-card {
-            border-top: 5px solid #94a3b8;
-            min-height: 112px;
-        }
-
-        .assess-red { border-top-color: var(--red); }
-        .assess-orange { border-top-color: var(--orange); }
-        .assess-yellow { border-top-color: var(--yellow); }
-        .assess-green { border-top-color: var(--green); }
-        .assess-blue { border-top-color: var(--blue); }
-
         .large-card {
-            margin-top: 16px;
-            padding: 22px;
+            margin-top: 14px;
+            padding: 18px 20px;
         }
 
         .large-card p {
             color: var(--ink);
-            font-size: 17px;
+            font-size: 16px;
             line-height: 1.5;
-            margin: 12px 0 0;
+            margin: 10px 0 0;
             overflow-wrap: anywhere;
             white-space: pre-wrap;
         }
 
         .action-card { border-left: 6px solid var(--blue); }
-        .warning-card { border-left: 6px solid var(--orange); background: #fff7ed; }
-        .forbidden-card { border-left: 6px solid var(--red); background: #fff7f7; }
+        .warning-card { border-left: 6px solid var(--orange); background: #fffaf3; }
+        .forbidden-card { border-left: 6px solid var(--red); background: #fff8f8; }
         .deescalation-card { border-left: 6px solid var(--green); }
 
         .reply-context {
