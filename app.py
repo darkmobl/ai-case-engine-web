@@ -390,9 +390,19 @@ def apply_theme() -> None:
         }
 
         [data-testid="stSidebar"] input,
-        [data-testid="stSidebar"] textarea,
-        [data-testid="stSidebar"] [data-baseweb="select"] div {
-            color: #111827 !important;
+        [data-testid="stSidebar"] textarea {
+            background-color: #111827 !important;
+            border: 1px solid #475569 !important;
+            caret-color: #ffffff !important;
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        [data-testid="stSidebar"] input::placeholder,
+        [data-testid="stSidebar"] textarea::placeholder {
+            color: #cbd5e1 !important;
+            -webkit-text-fill-color: #cbd5e1 !important;
+            opacity: 1 !important;
         }
 
         .sidebar-title {
