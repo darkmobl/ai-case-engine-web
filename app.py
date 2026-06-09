@@ -91,7 +91,7 @@ def load_uploaded_or_manual_cases(case_mode: str) -> pd.DataFrame | None:
         submitted = st.form_submit_button("Case übernehmen", use_container_width=True)
 
     if submitted or "manual_case" not in st.session_state:
-        st.session_state["manual_case"] = pd.DataFrame([values], columns=REQUIRED_INPUT_COLUMNS)
+        st.session_state["manual_case_df"] = pd.DataFrame([values], columns=REQUIRED_INPUT_COLUMNS)
 
     return st.session_state["manual_case"]
 
