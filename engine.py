@@ -46,7 +46,25 @@ REQUIRED_INPUT_COLUMNS = [
     "previous_cases",
     "language",
 ]
-
+AGENT_VIEW_COLUMNS = [
+    "case_id",
+    "case_priority_class",
+    "escalation_risk_level",
+    "priority_score",
+    "urgency_level",
+    "business_value_level",
+    "customer_name",
+    "vehicle_model",
+    "recommended_template_id",
+    "tone_level",
+    "recommended_next_action",
+    "agent_warning",
+    "deescalation_phrases",
+    "forbidden_claims",
+    "recommended_customer_reply",
+    "template_selection_reason",
+    "decision_reason",
+]
 REQUIRED_RULEBOOK_SHEETS = [
     "business_value_matrix",
     "customer_type_rules",
