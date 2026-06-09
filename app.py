@@ -36,15 +36,10 @@ def main() -> None:
         return
 
     render_dashboard(agent_view)
-    cockpit_tab, reply_tab, export_tab = st.tabs(
-        ["Agent Cockpit", "Reply Template", "Table View / Export"]
-    )
+    cockpit_tab, export_tab = st.tabs(["Agent Cockpit", "Table & Export"])
 
     with cockpit_tab:
-        selected_row = render_agent_cockpit(agent_view)
-
-    with reply_tab:
-        render_reply_template(selected_row)
+        render_agent_cockpit(agent_view)
 
     with export_tab:
         render_export(results, agent_view)
@@ -55,9 +50,9 @@ def render_hero() -> None:
         """
         <section class="hero">
             <div>
-                <p class="hero-kicker">OEM Case Management</p>
                 <h1>AI Case Engine MVP</h1>
-                <h2>Priorisierung, Eskalationsrisiko und Antwortsteuerung für OEM Case Management</h2>
+                <h2>Case Prioritization & Response Guidance for OEM Case Management</h2>
+                <p>Bewertung von Business Value, Dringlichkeit, Eskalationsrisiko und Antwortlogik.</p>
             </div>
         </section>
         """,
@@ -211,17 +206,16 @@ def render_agent_cockpit(agent_view: pd.DataFrame) -> pd.Series:
         current = case_ids[0]
         st.session_state["selected_case_id"] = current
 
-    queue_col, workspace_col = st.columns([0.35, 0.65], gap="large")
+    queue_col, workspace_col = st.columns([0.32, 0.68], gap="large")
 
     with queue_col:
         st.markdown('<div class="cockpit-heading">Case Queue</div>', unsafe_allow_html=True)
-        selected_id = st.radio(
+        selected_id = st.selectbox(
             "Case auswählen",
             case_ids,
             index=case_ids.index(current),
             format_func=lambda case_id: radio_label(agent_view, case_id),
             key="selected_case_id",
-            label_visibility="collapsed",
         )
         selected_row = selected_case(agent_view, selected_id)
         render_case_queue(agent_view, selected_id)
@@ -268,23 +262,36 @@ def render_case_workspace(row: pd.Series) -> None:
         st.info("Bitte einen Case auswählen.")
         return
 
-    st.markdown('<div class="cockpit-heading">Case Workspace</div>', unsafe_allow_html=True)
-
-    st.markdown('<div class="workspace-section-title">Customer & Case</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    c1.markdown(info_card("Kunde", value(row, "customer_name")), unsafe_allow_html=True)
-    c2.markdown(info_card("Fahrzeugmodell", value(row, "vehicle_model")), unsafe_allow_html=True)
-    c3.markdown(info_card("Case ID", value(row, "case_id")), unsafe_allow_html=True)
-    c4.markdown(info_card("Template ID", value(row, "recommended_template_id")), unsafe_allow_html=True)
+    st.markdown(
+        f"""
+        <section class="customer-header">
+            <div>
+                <h2>{escape(value(row, "customer_name") or "-")}</h2>
+                <p>
+                    Case {escape(value(row, "case_id") or "-")} ·
+                    {escape(value(row, "vehicle_model") or "-")} ·
+                    Score {escape(value(row, "priority_score") or "-")}
+                </p>
+                <p class="template-line">Template {escape(value(row, "recommended_template_id") or "-")}</p>
+            </div>
+            <div class="customer-badges">
+                {badge(value(row, "case_priority_class"), "priority")}
+                {badge(value(row, "escalation_risk_level"), "risk")}
+                {badge(value(row, "urgency_level"), "neutral")}
+                {badge(value(row, "business_value_level"), "neutral")}
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown('<div class="workspace-section-title">Assessment</div>', unsafe_allow_html=True)
-    a1, a2, a3, a4, a5, a6 = st.columns(6)
+    a1, a2, a3, a4, a5 = st.columns(5)
     a1.markdown(assessment_card("Priority", value(row, "case_priority_class"), "priority"), unsafe_allow_html=True)
     a2.markdown(assessment_card("Risk", value(row, "escalation_risk_level"), "risk"), unsafe_allow_html=True)
-    a3.markdown(assessment_card("Score", value(row, "priority_score"), "score"), unsafe_allow_html=True)
-    a4.markdown(assessment_card("Urgency", value(row, "urgency_level"), "neutral"), unsafe_allow_html=True)
-    a5.markdown(assessment_card("Business Value", value(row, "business_value_level"), "neutral"), unsafe_allow_html=True)
-    a6.markdown(assessment_card("Tone Level", value(row, "tone_level"), "neutral"), unsafe_allow_html=True)
+    a3.markdown(assessment_card("Urgency", value(row, "urgency_level"), "neutral"), unsafe_allow_html=True)
+    a4.markdown(assessment_card("Business Value", value(row, "business_value_level"), "neutral"), unsafe_allow_html=True)
+    a5.markdown(assessment_card("Tone Level", value(row, "tone_level"), "neutral"), unsafe_allow_html=True)
 
     action_text = value(row, "recommended_next_action")
     st.markdown(
@@ -297,27 +304,38 @@ def render_case_workspace(row: pd.Series) -> None:
         unsafe_allow_html=True,
     )
 
-    warning = value(row, "agent_warning")
-    if warning:
+    st.markdown('<div class="workspace-section-title">Risk & Compliance</div>', unsafe_allow_html=True)
+    risk_left, risk_right = st.columns(2)
+    with risk_left:
+        warning = value(row, "agent_warning")
         st.markdown(
             f"""
             <div class="large-card warning-card">
                 <span>Agent Warning</span>
-                <p>{escape(warning)}</p>
+                <p>{escape(warning) if warning else "-"}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with risk_right:
+        forbidden = value(row, "forbidden_claims")
+        st.markdown(
+            f"""
+            <div class="large-card forbidden-card">
+                <span>Forbidden Claims</span>
+                <p>{escape(forbidden) if forbidden else "-"}</p>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    forbidden = value(row, "forbidden_claims")
-    st.markdown(
-        f"""
-        <div class="large-card forbidden-card">
-            <span>Forbidden Claims</span>
-            <p>{escape(forbidden) if forbidden else "-"}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    st.markdown('<div class="workspace-section-title">Recommended Customer Reply</div>', unsafe_allow_html=True)
+    st.text_area(
+        "Recommended Customer Reply",
+        value=value(row, "recommended_customer_reply"),
+        height=340,
+        label_visibility="collapsed",
+        key=f"reply_template_{value(row, 'case_id')}",
     )
 
     with st.expander("Warum wurde dieser Case so bewertet?"):
@@ -327,42 +345,8 @@ def render_case_workspace(row: pd.Series) -> None:
         st.write(value(row, "template_selection_reason") or "-")
 
 
-def render_reply_template(row: pd.Series) -> None:
-    st.markdown('<div class="cockpit-heading">Empfohlenes Antworttemplate</div>', unsafe_allow_html=True)
-    if row.empty:
-        st.info("Bitte zuerst einen Case auswählen.")
-        return
-
-    st.markdown(
-        f"""
-        <div class="reply-context">
-            <span>{escape(value(row, "case_id"))}</span>
-            <strong>{escape(value(row, "customer_name"))}</strong>
-            <em>{escape(value(row, "recommended_template_id"))}</em>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.text_area(
-        "Recommended Customer Reply",
-        value=value(row, "recommended_customer_reply"),
-        height=320,
-        label_visibility="collapsed",
-        key=f"reply_template_{value(row, 'case_id')}",
-    )
-    st.markdown(
-        f"""
-        <div class="large-card deescalation-card">
-            <span>Deescalation Phrases</span>
-            <p>{escape(value(row, "deescalation_phrases")) or "-"}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def render_export(results: pd.DataFrame, agent_view: pd.DataFrame) -> None:
-    st.markdown('<div class="cockpit-heading">Table View / Export</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cockpit-heading">Table & Export</div>', unsafe_allow_html=True)
     visible_cols = [col for col in AGENT_VIEW_COLUMNS if col in agent_view.columns]
 
     st.markdown('<div class="table-title">Agent View</div>', unsafe_allow_html=True)
@@ -548,14 +532,14 @@ def apply_theme() -> None:
 
         .hero {
             align-items: center;
-            background: linear-gradient(135deg, #ffffff 0%, #eef4ff 100%);
-            border: 1px solid var(--line);
+            background: linear-gradient(135deg, #0f172a 0%, #172033 55%, #1e3a5f 100%);
+            border: 1px solid #263244;
             border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+            box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
             display: flex;
             min-height: 118px;
-            margin-bottom: 18px;
-            padding: 22px 28px;
+            margin-bottom: 16px;
+            padding: 22px 30px;
         }
 
         .hero-kicker,
@@ -568,7 +552,7 @@ def apply_theme() -> None:
         }
 
         .hero h1 {
-            color: var(--ink);
+            color: #ffffff;
             font-size: 34px;
             line-height: 1.05;
             margin: 0;
@@ -576,10 +560,16 @@ def apply_theme() -> None:
         }
 
         .hero h2 {
-            color: #344054;
+            color: #dbeafe;
             font-size: 17px;
             font-weight: 700;
             letter-spacing: 0;
+            margin: 8px 0 0;
+        }
+
+        .hero p {
+            color: #b8c7dc;
+            font-size: 14px;
             margin: 8px 0 0;
         }
 
@@ -640,8 +630,8 @@ def apply_theme() -> None:
 
         .kpi-card {
             border-top: 5px solid var(--blue);
-            min-height: 104px;
-            padding: 18px 18px 16px;
+            min-height: 92px;
+            padding: 15px 16px 14px;
         }
 
         .kpi-card span,
@@ -659,9 +649,9 @@ def apply_theme() -> None:
         .kpi-card strong {
             color: var(--ink);
             display: block;
-            font-size: 34px;
+            font-size: 32px;
             line-height: 1;
-            margin-top: 14px;
+            margin-top: 10px;
         }
 
         .kpi-blue { border-top-color: var(--blue); }
@@ -671,9 +661,9 @@ def apply_theme() -> None:
 
         .cockpit-heading {
             color: var(--ink);
-            font-size: 22px;
+            font-size: 21px;
             font-weight: 850;
-            margin: 12px 0 14px;
+            margin: 10px 0 14px;
         }
 
         .workspace-section-title,
@@ -692,7 +682,9 @@ def apply_theme() -> None:
         }
 
         .queue-card.selected {
-            outline: 3px solid rgba(37, 99, 235, 0.22);
+            background: #f8fbff;
+            box-shadow: 0 12px 30px rgba(37, 99, 235, 0.14);
+            outline: 3px solid rgba(37, 99, 235, 0.24);
         }
 
         .queue-critical { border-left-color: var(--red); }
@@ -779,6 +771,46 @@ def apply_theme() -> None:
             padding-top: 10px;
         }
 
+        .customer-header {
+            align-items: flex-start;
+            background: #ffffff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+            display: flex;
+            gap: 18px;
+            justify-content: space-between;
+            margin: 10px 0 16px;
+            padding: 24px;
+        }
+
+        .customer-header h2 {
+            color: var(--ink);
+            font-size: 30px;
+            line-height: 1.15;
+            margin: 0;
+            letter-spacing: 0;
+        }
+
+        .customer-header p {
+            color: var(--muted);
+            font-size: 15px;
+            margin: 8px 0 0;
+        }
+
+        .customer-header .template-line {
+            color: #344054;
+            font-weight: 800;
+        }
+
+        .customer-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+            max-width: 340px;
+        }
+
         .info-card,
         .assessment-card {
             min-height: 104px;
@@ -797,6 +829,7 @@ def apply_theme() -> None:
 
         .assessment-card {
             border-top: 5px solid #94a3b8;
+            min-height: 112px;
         }
 
         .assess-red { border-top-color: var(--red); }
@@ -807,12 +840,12 @@ def apply_theme() -> None:
 
         .large-card {
             margin-top: 16px;
-            padding: 20px;
+            padding: 22px;
         }
 
         .large-card p {
             color: var(--ink);
-            font-size: 18px;
+            font-size: 17px;
             line-height: 1.5;
             margin: 12px 0 0;
             overflow-wrap: anywhere;
@@ -857,9 +890,12 @@ def apply_theme() -> None:
 
         textarea {
             background: #ffffff !important;
+            border: 1px solid var(--line) !important;
+            border-radius: 16px !important;
             color: #111827 !important;
             font-size: 16px !important;
             line-height: 1.5 !important;
+            padding: 18px !important;
         }
 
         [data-testid="stSidebar"] input,
@@ -869,6 +905,13 @@ def apply_theme() -> None:
             caret-color: #ffffff !important;
             color: #ffffff !important;
             -webkit-text-fill-color: #ffffff !important;
+        }
+
+        [data-testid="stSidebar"] input::placeholder,
+        [data-testid="stSidebar"] textarea::placeholder {
+            color: #cbd5e1 !important;
+            -webkit-text-fill-color: #cbd5e1 !important;
+            opacity: 1 !important;
         }
 
         .stTabs [data-baseweb="tab-list"] {
@@ -890,6 +933,13 @@ def apply_theme() -> None:
             border: 1px solid var(--line);
             border-radius: 16px;
             padding: 10px;
+        }
+
+        .stSelectbox [data-baseweb="select"] > div {
+            background: #ffffff;
+            border-color: var(--line);
+            border-radius: 14px;
+            min-height: 44px;
         }
 
         [data-testid="stSidebar"] .stRadio [role="radiogroup"] {
